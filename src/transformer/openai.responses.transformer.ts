@@ -52,7 +52,7 @@ interface ResponsesStreamEvent {
       image_url?: string;
       mime_type?: string;
     }>;
-    reasoning?: string; // 添加 reasoning 字段支持
+    reasoning?: string; // Add reasoning field support
   };
   response?: {
     id?: string;
@@ -61,7 +61,7 @@ interface ResponsesStreamEvent {
       type: string;
     }>;
   };
-  reasoning_summary?: string; // 添加推理摘要支持
+  reasoning_summary?: string; // Add reasoning summary support
 }
 
 export class OpenAIResponsesTransformer implements Transformer {
@@ -74,7 +74,7 @@ export class OpenAIResponsesTransformer implements Transformer {
     delete request.temperature;
     delete request.max_tokens;
 
-    // 处理 reasoning 参数
+    // Handle reasoning parameter
     if (request.reasoning) {
       (request as any).reasoning = {
         effort: request.reasoning.effort,
@@ -233,7 +233,7 @@ export class OpenAIResponsesTransformer implements Transformer {
 
       const decoder = new TextDecoder();
       const encoder = new TextEncoder();
-      let buffer = ""; // 用于缓冲不完整的数据
+      let buffer = ""; // Used to buffer incomplete data
       let isStreamEnded = false;
 
       const transformer = this;
@@ -241,11 +241,11 @@ export class OpenAIResponsesTransformer implements Transformer {
         async start(controller) {
           const reader = response.body!.getReader();
 
-          // 索引跟踪变量，只有在事件类型切换时才增加索引
+          // Index tracking variable, only increases when event type changes
           let currentIndex = -1;
           let lastEventType = "";
 
-          // 获取当前应该使用的索引的函数
+          // Function to get the current index to use
           const getCurrentIndex = (eventType: string) => {
             if (eventType !== lastEventType) {
               currentIndex++;
@@ -259,7 +259,7 @@ export class OpenAIResponsesTransformer implements Transformer {
               const { done, value } = await reader.read();
               if (done) {
                 if (!isStreamEnded) {
-                  // 发送结束标记
+                  // Send end marker
                   const doneChunk = `data: [DONE]\n\n`;
                   controller.enqueue(encoder.encode(doneChunk));
                 }
@@ -269,19 +269,19 @@ export class OpenAIResponsesTransformer implements Transformer {
               const chunk = decoder.decode(value, { stream: true });
               buffer += chunk;
 
-              // 处理缓冲区中完整的数据行
+              // Process complete data lines in buffer
               let lines = buffer.split(/\r?\n/);
-              buffer = lines.pop() || ""; // 最后一行可能不完整，保留在缓冲区
+              buffer = lines.pop() || ""; // The last line may be incomplete, keep in buffer
 
               for (const line of lines) {
                 if (!line.trim()) continue;
 
                 try {
                   if (line.startsWith("event: ")) {
-                    // 处理事件行，暂存以便与下一行数据配对
+                    // Handle event line, temporarily store to pair with next data line
                     continue;
                   } else if (line.startsWith("data: ")) {
-                    const dataStr = line.slice(5).trim(); // 移除 "data: " 前缀
+                    const dataStr = line.slice(5).trim(); // Remove "data: " prefix
                     if (dataStr === "[DONE]") {
                       isStreamEnded = true;
                       controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
@@ -291,9 +291,9 @@ export class OpenAIResponsesTransformer implements Transformer {
                     try {
                       const data: ResponsesStreamEvent = JSON.parse(dataStr);
 
-                      // 根据不同的事件类型转换为chat格式
+                      // Convert to chat format based on different event types
                       if (data.type === "response.output_text.delta") {
-                        // 将output_text.delta转换为chat格式
+                        // Convert output_text.delta to chat format
                         const chatChunk = {
                           id: data.item_id || "chatcmpl-" + Date.now(),
                           object: "chat.completion.chunk",
@@ -319,7 +319,7 @@ export class OpenAIResponsesTransformer implements Transformer {
                         data.type === "response.output_item.added" &&
                         data.item?.type === "function_call"
                       ) {
-                        // 处理function call开始 - 创建初始的tool call chunk
+                        // Handle function call start - create initial tool call chunk
                         const functionCallChunk = {
                           id:
                             data.item.call_id ||
@@ -359,7 +359,7 @@ export class OpenAIResponsesTransformer implements Transformer {
                         data.type === "response.output_item.added" &&
                         data.item?.type === "message"
                       ) {
-                        // 处理message item added事件
+                        // Handle message item added event
                         const contentItems: MessageContent[] = [];
                         (data.item.content || []).forEach((item: any) => {
                           if (item.type === "output_text") {
@@ -440,7 +440,7 @@ export class OpenAIResponsesTransformer implements Transformer {
                       } else if (
                         data.type === "response.function_call_arguments.delta"
                       ) {
-                        // 处理function call参数增量
+                        // Handle function call argument delta
                         const functionCallChunk = {
                           id: data.item_id || "chatcmpl-" + Date.now(),
                           object: "chat.completion.chunk",
@@ -470,7 +470,7 @@ export class OpenAIResponsesTransformer implements Transformer {
                           )
                         );
                       } else if (data.type === "response.completed") {
-                        // 发送结束标记 - 检查是否是tool_calls完成
+                        // Send end marker - 检查是否是tool_calls完成
                         const finishReason = data.response?.output?.some(
                           (item: any) => item.type === "function_call"
                         )
@@ -500,7 +500,7 @@ export class OpenAIResponsesTransformer implements Transformer {
                       } else if (
                         data.type === "response.reasoning_summary_text.delta"
                       ) {
-                        // 处理推理文本，将其转换为 thinking delta 格式
+                        // Handle reasoning text, convert to thinking delta format
                         const thinkingChunk = {
                           id: data.item_id || "chatcmpl-" + Date.now(),
                           object: "chat.completion.chunk",
@@ -553,27 +553,27 @@ export class OpenAIResponsesTransformer implements Transformer {
                         );
                       }
                     } catch (e) {
-                      // 如果JSON解析失败，传递原始行
+                      // If JSON parsing fails, pass through original line
                       controller.enqueue(encoder.encode(line + "\n"));
                     }
                   } else {
-                    // 传递其他行
+                    // Pass through other lines
                     controller.enqueue(encoder.encode(line + "\n"));
                   }
                 } catch (error) {
                   console.error("Error processing line:", line, error);
-                  // 如果解析失败，直接传递原始行
+                  // If parsing fails, directly pass through original line
                   controller.enqueue(encoder.encode(line + "\n"));
                 }
               }
             }
 
-            // 处理缓冲区中剩余的数据
+            // Process remaining data in buffer
             if (buffer.trim()) {
               controller.enqueue(encoder.encode(buffer + "\n"));
             }
 
-            // 确保流结束时发送结束标记
+            // Ensure end marker is sent when stream ends
             if (!isStreamEnded) {
               const doneChunk = `data: [DONE]\n\n`;
               controller.enqueue(encoder.encode(doneChunk));
@@ -608,7 +608,7 @@ export class OpenAIResponsesTransformer implements Transformer {
   }
 
   private normalizeRequestContent(content: any, role: string | undefined) {
-    // 克隆内容对象并删除缓存控制字段
+    // Clone content object and remove cache control field
     const clone = { ...content };
     delete clone.cache_control;
 
@@ -636,7 +636,7 @@ export class OpenAIResponsesTransformer implements Transformer {
   }
 
   private convertResponseToChat(responseData: ResponsesAPIPayload): any {
-    // 从output数组中提取不同类型的输出
+    // Extract different types of output from output array
     const messageOutput = responseData.output?.find(
       (item) => item.type === "message"
     );
@@ -671,7 +671,7 @@ export class OpenAIResponsesTransformer implements Transformer {
     let toolCalls = null;
     let thinking = null;
 
-    // 处理推理内容
+    // Handle reasoning content
     if (messageOutput && messageOutput.reasoning) {
       thinking = {
         content: messageOutput.reasoning,
@@ -679,7 +679,7 @@ export class OpenAIResponsesTransformer implements Transformer {
     }
 
     if (messageOutput && messageOutput.content) {
-      // 分离文本和图片内容
+      // Separate text and image content
       const textParts: string[] = [];
       const imageParts: MessageContent[] = [];
 
@@ -707,7 +707,7 @@ export class OpenAIResponsesTransformer implements Transformer {
 
       // 构建最终内容
       if (imageParts.length > 0) {
-        // 如果有图片，将所有内容组合成数组
+        // If there are images, combine all content into array
         const contentArray: MessageContent[] = [];
         if (textParts.length > 0) {
           contentArray.push({
@@ -718,13 +718,13 @@ export class OpenAIResponsesTransformer implements Transformer {
         contentArray.push(...imageParts);
         messageContent = contentArray;
       } else {
-        // 如果只有文本，返回字符串
+        // If only text, return string
         messageContent = textParts.join("");
       }
     }
 
     if (functionCallOutput) {
-      // 处理function_call类型的输出
+      // Handle function_call type output
       toolCalls = [
         {
           id: functionCallOutput.call_id || functionCallOutput.id,
@@ -737,7 +737,7 @@ export class OpenAIResponsesTransformer implements Transformer {
       ];
     }
 
-    // 构建chat格式的响应
+    // Build chat format response
     const chatResponse = {
       id: responseData.id || "chatcmpl-" + Date.now(),
       object: "chat.completion",

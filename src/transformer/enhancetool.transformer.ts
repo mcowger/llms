@@ -8,7 +8,7 @@ export class EnhanceToolTransformer implements Transformer {
     if (response.headers.get("Content-Type")?.includes("application/json")) {
       const jsonResponse = await response.json();
       if (jsonResponse?.choices?.[0]?.message?.tool_calls?.length) {
-        // 处理非流式的工具调用参数解析
+        // Handle non-streaming tool call argument parsing
         for (const toolCall of jsonResponse.choices[0].message.tool_calls) {
           if (toolCall.function?.arguments) {
             toolCall.function.arguments = parseToolArguments(
@@ -45,7 +45,7 @@ export class EnhanceToolTransformer implements Transformer {
       let reasoningContent = "";
       let isReasoningComplete = false;
       let hasToolCall = false;
-      let buffer = ""; // 用于缓冲不完整的数据
+      let buffer = ""; // Used to buffer incomplete data
 
       const stream = new ReadableStream({
         async start(controller) {
@@ -218,7 +218,7 @@ export class EnhanceToolTransformer implements Transformer {
             while (true) {
               const { done, value } = await reader.read();
               if (done) {
-                // 处理缓冲区中剩余的数据
+                // Process remaining data in buffer
                 if (buffer.trim()) {
                   processBuffer(buffer, controller, encoder);
                 }
@@ -244,9 +244,9 @@ export class EnhanceToolTransformer implements Transformer {
 
               buffer += chunk;
 
-              // 如果缓冲区过大，进行处理避免内存泄漏
+              // If buffer is too large, process to avoid memory泄漏
               if (buffer.length > 1000000) {
-                // 1MB 限制
+                // 1MB limit
                 console.warn(
                   "Buffer size exceeds limit, processing partial data"
                 );
@@ -280,7 +280,7 @@ export class EnhanceToolTransformer implements Transformer {
 
               // 处理缓冲区中完整的数据行
               const lines = buffer.split("\n");
-              buffer = lines.pop() || ""; // 最后一行可能不完整，保留在缓冲区
+              buffer = lines.pop() || ""; // The last line may be incomplete, keep in buffer
 
               for (const line of lines) {
                 if (!line.trim()) continue;
